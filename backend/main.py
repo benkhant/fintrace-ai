@@ -1,3 +1,4 @@
+from ai import categorize_transaction, ask_agent
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -41,11 +42,13 @@ async def upload_csv(file: UploadFile = File(...)):
         if exists:
             continue
 
+        category = categorize_transaction(row["Description"])
+
         transaction = models.Transaction(
             date=row['Date'],
             description=row['Description'],
             amount=row['Amount'],
-            category=row['Category'] if pd.notna(row['Category']) else None
+            category=category
         )
         db.add(transaction)
         added_count += 1
@@ -61,3 +64,10 @@ def get_transactions():
     transactions = db.query(models.Transaction).all()
     db.close()
     return transactions
+
+@app.post("/ask")
+def ask(question: str):
+    db: Session = SessionLocal()
+    answer = ask_agent(question, db)
+    db.close()
+    return {"answer": answer}
