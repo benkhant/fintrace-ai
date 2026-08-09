@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+import json
 import os
 from openai import OpenAI
 from sqlalchemy.orm import Session
@@ -50,6 +51,29 @@ def get_category_totals(db: Session):
     )
     return {category: round(total, 2) for category, total in results}
 
+def search_transactions(db: Session, keyword: str):
+    results = (
+        db.query(models.Transaction)
+        .filter(models.Transaction.description.ilike(f"%{keyword}%"))
+        .all()
+    )
+
+    total = sum(t.amount for t in results)
+
+    return {
+        "transactions": [
+            {
+                "date": str(t.date),
+                "description": t.description,
+                "amount": t.amount,
+                "category": t.category,
+            }
+            for t in results
+        ],
+        "total": round(total, 2),
+        "count": len(results),
+    }
+
 tools = [
     {
         "type": "function",
@@ -62,7 +86,24 @@ tools = [
                 "required": [],
             },
         },
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_transactions",
+            "description": "Search transactions by keyword, such as a merchant name or part of a description. Returns matching transactions and their total.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "keyword": {
+                        "type": "string",
+                        "description": "The keyword to search for in transaction descriptions, e.g. 'Starbucks' or 'Amazon'.",
+                    },
+                },
+                "required": ["keyword"],
+            },
+        },
+    },
 ]
 
 def ask_agent(question: str, db: Session):
@@ -78,9 +119,13 @@ def ask_agent(question: str, db: Session):
 
     if reply.tool_calls:
         tool_call = reply.tool_calls[0]
+        function_name = tool_call.function.name
+        arguments = json.loads(tool_call.function.arguments)
 
-        if tool_call.function.name == "get_category_totals":
+        if function_name == "get_category_totals":
             result = get_category_totals(db)
+        elif function_name == "search_transactions":
+            result = search_transactions(db, arguments["keyword"])
 
         messages.append(reply)
         messages.append({

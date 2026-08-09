@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type Transaction = {
   id: number;
@@ -14,6 +14,10 @@ export default function Home() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, []);
 
   const fetchTransactions = async () => {
     const res = await fetch("http://127.0.0.1:8000/transactions");
