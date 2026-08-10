@@ -179,38 +179,11 @@ tools = [
 def ask_agent(question: str, db: Session):
     messages = [{"role": "user", "content": question}]
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages,
-        tools=tools,
-    )
-
-    reply = response.choices[0].message
-
-    if reply.tool_calls:
-        tool_call = reply.tool_calls[0]
-        function_name = tool_call.function.name
-        arguments = json.loads(tool_call.function.arguments)
-
-        if function_name == "get_category_totals":
-            result = get_category_totals(db)
-        elif function_name == "search_transactions":
-            result = search_transactions(db, arguments["keyword"])
-        elif function_name == "detect_recurring_subscriptions":
-            result = detect_recurring_subscriptions(db)
-            return format_recurring_subscriptions(result)
-
-        messages.append(reply)
-        messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call.id,
-            "content": json.dumps(result),
-        })
-
-        second_response = client.chat.completions.create(
+    for _ in range(5):
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
+                { 
                     "role": "system",
                     "content": (
                         "You are a personal finance assistant. Present tool results clearly "
@@ -219,8 +192,34 @@ def ask_agent(question: str, db: Session):
                 },
                 *messages,
             ],
+            tools=tools,
         )
 
-        return second_response.choices[0].message.content
+        reply = response.choices[0].message
+
+        if not reply.tool_calls:
+            return reply.content
+
+        messages.append(reply)
+
+        for tool_call in reply.tool_calls:
+            function_name = tool_call.function.name
+            arguments = json.loads(tool_call.function.arguments)
+
+            if function_name == "get_category_totals":
+                result = get_category_totals(db)
+            elif function_name == "search_transactions":
+                result = search_transactions(db, arguments["keyword"])
+            elif function_name == "detect_recurring_subscriptions":
+                raw_result = detect_recurring_subscriptions(db)
+                result = format_recurring_subscriptions(raw_result)
+            else: 
+                result = "Unknown tool."
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": result if isinstance(result, str) else json.dumps(result),
+            })
     
-    return reply.content
+    return "Sorry, I wasn't able to fully answer that question."
