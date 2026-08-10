@@ -1,10 +1,11 @@
+from collections import defaultdict
 from dotenv import load_dotenv
 import json
+import models
 import os
 from openai import OpenAI
-from sqlalchemy.orm import Session
 from sqlalchemy import func
-import models
+from sqlalchemy.orm import Session
 
 load_dotenv()
 
@@ -74,6 +75,63 @@ def search_transactions(db: Session, keyword: str):
         "count": len(results),
     }
 
+def detect_recurring_subscriptions(db: Session):
+    all_transactions = (
+        db.query(models.Transaction)
+        .filter(models.Transaction.amount < 0)
+        .all()
+    )
+
+    grouped = defaultdict(list)
+    for t in all_transactions:
+        grouped[t.description].append(t)
+
+    subscriptions = []
+    for description, txns in grouped.items():
+        if len(txns) < 2:
+            continue
+
+        categories = {t.category for t in txns if t.category}
+        if categories and "Subscriptions" not in categories:
+            continue
+
+        amounts = [round(t.amount, 2) for t in txns]
+        if len(set(amounts)) > 1:
+            continue
+
+        months = {(t.date.year, t.date.month) for t in txns}
+        if len(months) != len(txns):
+            continue
+
+        avg_amount = sum(amounts) / len(amounts)
+        subscriptions.append({
+            "description": description,
+            "occurrences": len(txns),
+            "average_amount": round(avg_amount, 2),
+            "dates": sorted(str(t.date) for t in txns),
+        })
+
+    subscriptions.sort(key=lambda s: s["average_amount"])
+    return {"subscriptions": subscriptions, "count": len(subscriptions)}
+
+
+def format_recurring_subscriptions(result: dict) -> str:
+    subs = result.get("subscriptions", [])
+    if not subs:
+        return "No recurring subscriptions found in your transaction history."
+
+    lines = [f"Found {len(subs)} recurring charge(s):\n"]
+    for sub in subs:
+        amount = abs(sub["average_amount"])
+        lines.append(f"• {sub['description']}")
+        lines.append(f"  ${amount:.2f} × {sub['occurrences']} charges")
+        lines.append(f"  Dates: {', '.join(sub['dates'])}")
+        lines.append("")
+
+    monthly_total = sum(abs(s["average_amount"]) for s in subs)
+    lines.append(f"Estimated monthly total: ${monthly_total:.2f}")
+    return "\n".join(lines)
+
 tools = [
     {
         "type": "function",
@@ -104,6 +162,18 @@ tools = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "detect_recurring_subscriptions",
+            "description": "Find transactions that repeat with a consistent amount over time, which often indicates a subscription or recurring expense.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
 ]
 
 def ask_agent(question: str, db: Session):
@@ -126,17 +196,29 @@ def ask_agent(question: str, db: Session):
             result = get_category_totals(db)
         elif function_name == "search_transactions":
             result = search_transactions(db, arguments["keyword"])
+        elif function_name == "detect_recurring_subscriptions":
+            result = detect_recurring_subscriptions(db)
+            return format_recurring_subscriptions(result)
 
         messages.append(reply)
         messages.append({
             "role": "tool",
             "tool_call_id": tool_call.id,
-            "content": str(result),
+            "content": json.dumps(result),
         })
 
         second_response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=messages,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a personal finance assistant. Present tool results clearly "
+                        "using plain text with line breaks. Do not use markdown formatting."
+                    ),
+                },
+                *messages,
+            ],
         )
 
         return second_response.choices[0].message.content
