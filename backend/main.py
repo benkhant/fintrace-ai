@@ -1,4 +1,4 @@
-from ai import categorize_transaction, ask_agent
+from ai import categorize_transaction, ask_agent, get_category_totals
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -71,3 +71,20 @@ def ask(question: str):
     answer = ask_agent(question, db)
     db.close()
     return {"answer": answer}
+
+@app.get("/summary")
+def get_summary():
+    db: Session = SessionLocal()
+    category_totals = get_category_totals(db)
+    db.close()
+
+    total_income = sum(v for v in category_totals.values() if v > 0)
+    total_expenses = sum(v for v in category_totals.values() if v < 0)
+    net = total_income + total_expenses
+
+    return {
+        "category_totals": category_totals,
+        "total_income": round(total_income, 2),
+        "total_expenses": round(total_expenses, 2),
+        "net": round(net, 2),
+    }

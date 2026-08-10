@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 type Transaction = {
   id: number;
@@ -14,15 +15,32 @@ export default function Home() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [summary, setSummary] = useState<{
+    category_totals: Record<string, number>;
+    total_income: number;
+    total_expenses: number;
+    net: number;
+  } | null>(null);
 
   useEffect(() => {
     fetchTransactions();
+    fetchSummary();
   }, []);
 
   const fetchTransactions = async () => {
     const res = await fetch("http://127.0.0.1:8000/transactions");
     const data = await res.json();
     setTransactions(data);
+  };
+
+  const fetchSummary = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:8000/summary");
+      const data = await res.json();
+      setSummary(data);
+    } catch (err) {
+      console.error("Could not load summary");
+    }
   };
 
   const handleUpload = async () => {
@@ -59,6 +77,47 @@ export default function Home() {
     <main className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-900 mb-6">Fintrace AI</h1>
+
+        {summary && (
+          <>
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="bg-white p-4 rounded-lg shadow-sm">
+                <p className="text-sm text-gray-500">Total Income</p>
+                <p className="text-2xl font-bold text-green-600">
+                  ${summary.total_income.toFixed(2)}
+                </p>
+              </div>
+              <div className="bg-white p-4 rounded-lg shadow-sm">
+                <p className="text-sm text-gray-500">Total Expenses</p>
+                <p className="text-2xl font-bold text-red-600">
+                  ${Math.abs(summary.total_expenses).toFixed(2)}
+                </p>
+              </div>
+              <div className="bg-white p-4 rounded-lg shadow-sm">
+                <p className="text-sm text-gray-500">Net</p>
+                <p className={`text-2xl font-bold ${summary.net >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  ${summary.net.toFixed(2)}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+              <p className="text-sm text-gray-500 mb-2">Spending by Category</p>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart
+                  data={Object.entries(summary.category_totals)
+                    .filter(([, value]) => value < 0)
+                    .map(([category, value]) => ({ category, amount: Math.abs(value) }))}
+                >
+                  <XAxis dataKey="category" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Bar dataKey="amount" fill="#dc2626" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </>
+        )}
   
         <div className="flex items-center gap-3 mb-6 bg-white p-4 rounded-lg shadow-sm">
         <label className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-200 transition border border-gray-300">
