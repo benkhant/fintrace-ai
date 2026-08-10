@@ -21,10 +21,17 @@ export default function Home() {
     total_expenses: number;
     net: number;
   } | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
 
   useEffect(() => {
     fetchTransactions();
     fetchSummary();
+  }, []);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/categories")
+      .then((res) => res.json())
+      .then(setCategories);
   }, []);
 
   const fetchTransactions = async () => {
@@ -84,6 +91,20 @@ export default function Home() {
       setMessage("All transactions deleted.")
     } catch (err) {
       setMessage("Could not reach the server.");
+    }
+  };
+
+  const handleCategoryChange = async (id: number, newCategory: string) => {
+    try {
+      await fetch(`http://127.0.0.1:8000/transactions/${id}?category=${encodeURIComponent(newCategory)}`, {
+        method: "PATCH",
+      });
+      setTransactions((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, category: newCategory } : t))
+      );
+      fetchSummary();
+    } catch (error) {
+      console.error("Could not update category");
     }
   };
 
@@ -188,7 +209,22 @@ export default function Home() {
                   >
                     {t.amount < 0 ? "-" : "+"}${Math.abs(t.amount).toFixed(2)}
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{t.category ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={t.category ?? ""}
+                      onChange={(e) => handleCategoryChange(t.id, e.target.value)}
+                      className="text-sm text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white"
+                    >
+                      <option value="" disabled>
+                        Select category
+                      </option>
+                      {categories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
                 </tr>
               ))}
             </tbody>

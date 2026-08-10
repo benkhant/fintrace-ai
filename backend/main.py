@@ -1,4 +1,4 @@
-from ai import categorize_transaction, ask_agent, get_category_totals
+from ai import categorize_transaction, ask_agent, get_category_totals, CATEGORIES
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -96,3 +96,25 @@ def clear_transactions():
     db.commit()
     db.close()
     return {"message": "All transactions deleted"}
+
+@app.patch("/transactions/{transaction_id}")
+def update_category(transaction_id: int, category: str):
+    if category not in CATEGORIES:
+        return {"error": "Invalid category"}
+
+    db: Session = SessionLocal()
+    transaction = db.query(models.Transaction).filter_by(id=transaction_id).first()
+
+    if not transaction:
+        db.close()
+        return {"error": "Transaction not found"}
+
+    transaction.category = category
+    db.commit()
+    db.close()
+
+    return {"message": "Category updated", "id": transaction_id, "category": category}
+
+@app.get("/categories")
+def get_categories():
+    return CATEGORIES
