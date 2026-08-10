@@ -1,7 +1,5 @@
 "use client";
 
-import { existsSync } from "fs";
-import { Turret_Road } from "next/font/google";
 import { useState } from "react";
 
 type Message = {
@@ -58,7 +56,7 @@ export default function AskPage() {
                     {messages.map((m, i) => (
                         <div
                         key={i}
-                        className={`max-w-[80%] px-4 py-2 rounded-lg text-sm ${
+                        className={`max-w-[80%] px-4 py-2 rounded-lg text-sm whitespace-pre-wrap ${
                         m.role === "user"
                             ? "bg-blue-600 text-white self-end"
                             : "bg-gray-100 text-gray-900 self-start"
