@@ -88,3 +88,11 @@ def get_summary():
         "total_expenses": round(total_expenses, 2),
         "net": round(net, 2),
     }
+
+@app.delete("/transactions")
+def clear_transactions():
+    db: Session = SessionLocal()
+    db.query(models.Transaction).delete()
+    db.commit()
+    db.close()
+    return {"message": "All transactions deleted"}

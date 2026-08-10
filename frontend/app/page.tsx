@@ -68,10 +68,24 @@ export default function Home() {
     const data = await res.json();
     setMessage(data.message);
     fetchTransactions();
+    fetchSummary();
   } catch (err) {
     setMessage("Could not reach the server. Is the backend running?");
   }
 };
+
+  const handleClearAll = async () => {
+    if (!confirm("Delete all transactions? This cannot be undone.")) return;
+
+    try {
+      await fetch("http://127.0.0.1:8000/transactions", { method: "DELETE" });
+      fetchTransactions();
+      fetchSummary();
+      setMessage("All transactions deleted.")
+    } catch (err) {
+      setMessage("Could not reach the server.");
+    }
+  };
 
   return (
     <main className="min-h-screen bg-gray-50 p-8">
@@ -141,10 +155,10 @@ export default function Home() {
             Upload CSV
           </button>
           <button
-            onClick={fetchTransactions}
-            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-300 transition"
+            onClick={handleClearAll}
+            className="bg-red-100 text-red-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-red-200 transition"
           >
-            Refresh Transactions
+            Clear All Data
           </button>
         </div>
 
