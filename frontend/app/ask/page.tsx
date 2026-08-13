@@ -22,7 +22,7 @@ export default function AskPage() {
 
         try {
             const res = await fetch(
-                `http://127.0.0.1:8000/ask?question=${encodeURIComponent(question)}`,
+                `${process.env.NEXT_PUBLIC_API_URL}/ask?question=${encodeURIComponent(question)}`,
                 { method: "POST"}
             );
 

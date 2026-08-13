@@ -29,20 +29,20 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/categories")
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/categories`)
       .then((res) => res.json())
       .then(setCategories);
   }, []);
 
   const fetchTransactions = async () => {
-    const res = await fetch("http://127.0.0.1:8000/transactions");
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/transactions`);
     const data = await res.json();
     setTransactions(data);
   };
 
   const fetchSummary = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/summary");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/summary`);
       const data = await res.json();
       setSummary(data);
     } catch (err) {
@@ -62,7 +62,7 @@ export default function Home() {
     formData.append("file", file);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/upload-csv", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/upload-csv`, {
       method: "POST",
       body: formData,
     });
@@ -85,7 +85,7 @@ export default function Home() {
     if (!confirm("Delete all transactions? This cannot be undone.")) return;
 
     try {
-      await fetch("http://127.0.0.1:8000/transactions", { method: "DELETE" });
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/transactions`, { method: "DELETE" });
       fetchTransactions();
       fetchSummary();
       setMessage("All transactions deleted.")
@@ -96,7 +96,7 @@ export default function Home() {
 
   const handleCategoryChange = async (id: number, newCategory: string) => {
     try {
-      await fetch(`http://127.0.0.1:8000/transactions/${id}?category=${encodeURIComponent(newCategory)}`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/transactions/${id}?category=${encodeURIComponent(newCategory)}`, {
         method: "PATCH",
       });
       setTransactions((prev) =>
