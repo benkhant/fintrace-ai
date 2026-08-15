@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { usePlaidLink } from "react-plaid-link";
+import { useState, useEffect } from "react";
 
 type Transaction = {
   id: number;
@@ -22,10 +23,28 @@ export default function Home() {
     net: number;
   } | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
+  const [linkToken, setLinkToken] = useState<string | null>(null);
+
+  const { open, ready } = usePlaidLink({
+    token: linkToken,
+    onSuccess: async (public_token: string | null) => {
+      if (!public_token) return;
+
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/plaid/exchange-token?public_token=${public_token}`, {
+          method: "POST",
+        });
+        setMessage("Bank connected successfully!");
+      } catch (err) {
+        setMessage("Could not connect bank.");
+      }
+    },
+  });
 
   useEffect(() => {
     fetchTransactions();
     fetchSummary();
+    fetchLinkToken();
   }, []);
 
   useEffect(() => {
@@ -108,6 +127,33 @@ export default function Home() {
     }
   };
 
+  const fetchLinkToken = async () => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/plaid/create-link-token`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      setLinkToken(data.link_token);
+    } catch (error) {
+      console.error("Could not connect to Plaid.");
+    }
+  };
+
+  const handleSyncTransactions = async () => {
+    setMessage("Syncing transactions from bank...");
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/plaid/sync-transactions`, {
+        method: "POST",
+    });
+    const data = await res.json();
+    setMessage(data.message || data.error);
+    fetchTransactions();
+    fetchSummary();
+  } catch (err) {
+    setMessage("Could not sync transactions.");
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
@@ -180,6 +226,19 @@ export default function Home() {
             className="bg-red-100 text-red-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-red-200 transition"
           >
             Clear All Data
+          </button>
+          <button
+            onClick={() => open()}
+            disabled={!ready}
+            className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700 transition disabled:opacity-50"
+          >
+            Connect Bank
+          </button>
+          <button
+            onClick={handleSyncTransactions}
+            className="bg-purple-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-purple-700 transition"
+          >
+            Sync Transactions
           </button>
         </div>
 
