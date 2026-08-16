@@ -5,8 +5,11 @@ from plaid.api import plaid_api
 
 load_dotenv()
 
+PLAID_ENV = os.getenv("PLAID_ENV", "sandbox")
+host = plaid.Environment.Sandbox if PLAID_ENV == "sandbox" else plaid.Environment.Production
+
 configuration = plaid.Configuration(
-    host=plaid.Environment.Sandbox,
+    host=host,
     api_key={
         "clientId": os.getenv("PLAID_CLIENT_ID"),
         "secret": os.getenv("PLAID_SECRET"),
