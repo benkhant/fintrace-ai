@@ -1,5 +1,6 @@
 from ai import categorize_transaction, ask_agent, get_category_totals, CATEGORIES
 from database import Base, engine, SessionLocal
+from encryption import encrypt_token, decrypt_token
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 import io
@@ -143,13 +144,14 @@ def exchange_token(public_token: str):
     request = ItemPublicTokenExchangeRequest(public_token=public_token)
     response = client.item_public_token_exchange(request)
     access_token = response.access_token
+    encrypted = encrypt_token(access_token)
 
     db: Session = SessionLocal()
     existing = db.query(models.PlaidItem).first()
     if existing:
-        existing.access_token = access_token
+        existing.access_token = encrypted
     else:
-        db.add(models.PlaidItem(access_token=access_token))
+        db.add(models.PlaidItem(access_token=encrypted))
     db.commit()
     db.close()
 
@@ -164,7 +166,8 @@ def sync_plaid_transactions():
         db.close()
         return {"error": "No bank connected yet"}
 
-    request = TransactionsSyncRequest(access_token=plaid_item.access_token)
+    access_token = decrypt_token(plaid_item.access_token)
+    request = TransactionsSyncRequest(access_token=access_token)
     response = client.transactions_sync(request)
     added_transactions = response.added
 
