@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import date
 from dotenv import load_dotenv
 import json
 import models
@@ -44,12 +45,15 @@ Respond with ONLY the category name, nothing else."""
 
     return category
 
-def get_category_totals(db: Session):
-    results = (
-        db.query(models.Transaction.category, func.sum(models.Transaction.amount))
-        .group_by(models.Transaction.category)
-        .all()
-    )
+def get_category_totals(db: Session, start_date: date = None, end_date: date = None):
+    query = db.query(models.Transaction.category, func.sum(models.Transaction.amount))
+
+    if start_date:
+        query = query.filter(models.Transaction.date >= start_date)
+    if end_date:
+        query = query.filter(models.Transaction.date <= end_date)
+
+    results = query.group_by(models.Transaction.category).all()
     return {category: round(total, 2) for category, total in results}
 
 def search_transactions(db: Session, keyword: str):
@@ -140,7 +144,16 @@ tools = [
             "description": "Get the total amount spent or earned in each spending category.",
             "parameters": {
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "start_date": {
+                        "type": "string",
+                        "description": "Start date in YYYY-MM-DD format. Omit for no start limit.",
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "End date in YYYY-MM-DD format. Omit for no end limit.",
+                    },
+                },
                 "required": [],
             },
         },
@@ -169,7 +182,16 @@ tools = [
             "description": "Find transactions that repeat with a consistent amount over time, which often indicates a subscription or recurring expense.",
             "parameters": {
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "start_date": {
+                        "type": "string",
+                        "description": "Start date in YYYY-MM-DD format. Omit for no start limit.",
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "End date in YYYY-MM-DD format. Omit for no end limit.",
+                    },
+                },
                 "required": [],
             },
         },
@@ -178,6 +200,7 @@ tools = [
 
 def ask_agent(question: str, db: Session):
     messages = [{"role": "user", "content": question}]
+    today = date.today().isoformat()
 
     for _ in range(5):
         response = client.chat.completions.create(
@@ -186,7 +209,10 @@ def ask_agent(question: str, db: Session):
                 { 
                     "role": "system",
                     "content": (
-                        "You are a personal finance assistant. Present tool results clearly "
+                        f"You are a personal finance assistant. Today's date is {today}. "
+                        "When the user asks about a relative time period like 'this month', "
+                        "'last week', or 'this year', calculate the actual date range based on "
+                        "today's date before calling any tools. Present tool results clearly "
                         "using plain text with line breaks. Do not use markdown formatting."
                     ),
                 },
@@ -207,7 +233,13 @@ def ask_agent(question: str, db: Session):
             arguments = json.loads(tool_call.function.arguments)
 
             if function_name == "get_category_totals":
-                result = get_category_totals(db)
+                start = arguments.get("start_date")
+                end = arguments.get("end_date")
+                result = get_category_totals(
+                    db,
+                    date.fromisoformat(start) if start else None,
+                    date.fromisoformat(end) if end else None,
+                )
             elif function_name == "search_transactions":
                 result = search_transactions(db, arguments["keyword"])
             elif function_name == "detect_recurring_subscriptions":
